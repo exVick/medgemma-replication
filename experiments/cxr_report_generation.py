@@ -9,6 +9,10 @@ from core.model import run_inference
 from core.utils import init_experiment_meta, save_results_with_meta
 from config.prompts import PROMPTS
 
+# TODO:
+# - trigger automatic RadGraph eval pipeline hook here
+# - fix the printouts
+
 
 def add_report_gen_args(parser):
     parser.add_argument("--parquet_file", type=str, required=True)
@@ -70,7 +74,6 @@ def run_report_generation_experiment(
     print(f"\n{'='*70}")
     print(f"Report generation: {total} studies x {len(sections)} sections")
     print(f"Sections: {sections}")
-    print(f"Output: {args.output_file}")
     print(f"{'='*70}\n")
 
     for _, row in df.iterrows():
@@ -123,4 +126,3 @@ def run_report_generation_experiment(
     _print_length_stats(results_df, sections)
     print(f"{'='*70}")
 
-    # TODO (future): trigger automatic RadGraph eval pipeline hook here.
