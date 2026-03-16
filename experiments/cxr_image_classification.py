@@ -53,7 +53,7 @@ def add_cxr_classification_args(parser):
         default="float32",
         choices=["bfloat16", "float16", "float32"],
     )
-    parser.add_argument("--use_8bit", action="store_true")
+    parser.add_argument("--use_8bit", type=bool, default=False, help="True if you want 8-bit model")
     parser.add_argument("--max_samples", type=int, default=-1, help="-1 = all")
     parser.add_argument(
         "--conditions",
@@ -149,12 +149,8 @@ def parse_yes_no(text: str) -> int:
 
 
 def compute_metrics(results_df: pd.DataFrame, conditions: List[str]) -> Tuple[Dict[str, float], float]:
-    """Compute per-condition F1 and macro F1."""
+    """Compute per-condition F1 and macro F1 (expects binary preds/labels: 0/1)."""
     f1_scores = {}
-
-    print("\n" + "=" * 60)
-    print("Classification metrics")
-    print("=" * 60)
 
     for cond in conditions:
         gt_col = f"gt_{cond}"
@@ -163,19 +159,18 @@ def compute_metrics(results_df: pd.DataFrame, conditions: List[str]) -> Tuple[Di
         y_true = results_df[gt_col].values
         y_pred = results_df[pred_col].values
 
-        # Keep uncertain (-1) predictions as-is to match your current logic;
-        # if you later want strict binary F1, map -1 -> 0 before this call.
         f1 = f1_score(y_true, y_pred, average="binary", zero_division=0)
         f1_scores[cond] = float(f1)
 
         n_pos_gt = int((y_true == 1).sum())
         n_pos_pred = int((y_pred == 1).sum())
-        print(f"  {cond:20s} | F1={f1:.4f} | GT pos: {n_pos_gt}/{len(y_true)} | Pred pos: {n_pos_pred}/{len(y_pred)}")
+        print(
+            f"  {cond:20s} | F1={f1:.4f} | GT pos: {n_pos_gt}/{len(y_true)} | Pred pos: {n_pos_pred}/{len(y_pred)}"
+        )
 
     macro_f1 = float(np.mean(list(f1_scores.values()))) if f1_scores else 0.0
     print(f"\n  {'MACRO F1':20s} | {macro_f1:.4f}")
     print("=" * 60)
-
     return f1_scores, macro_f1
 
 
@@ -241,11 +236,57 @@ def run_cxr_classification_experiment(args, model, processor, experiment_meta):
     save_results_with_meta(all_results, args.output_file, meta)
 
     results_df = pd.DataFrame(all_results)
-    f1_scores, macro_f1 = compute_metrics(results_df, args.conditions)
 
-    # Store final metrics in metadata JSON on final save
-    meta["f1_scores"] = f1_scores
-    meta["macro_f1"] = macro_f1
+    # --- Build evaluation variants for ambiguous predictions (-1) ---
+    pred_conditions = [f"pred_{cond}" for cond in args.conditions]
+
+    # 1) Drop rows where ANY condition prediction is ambiguous
+    results_no_ambiguous_df = results_df[
+        ~(results_df[pred_conditions].eq(-1).any(axis=1))
+    ].copy()
+    results_no_ambiguous_df.reset_index(drop=True, inplace=True)
+
+    # 2) Convert all ambiguous predictions to negative
+    results_amb_to_negative_df = results_df.copy()
+    results_amb_to_negative_df[pred_conditions] = (
+        results_amb_to_negative_df[pred_conditions].replace(-1, 0)
+    )
+
+    # --- Evaluate both ---
+    print("\n" + "=" * 60)
+    print("Results when we drop all ambiguous outputs")
+    print("=" * 60)
+    if len(results_no_ambiguous_df) == 0:
+        print("No rows left after dropping ambiguous predictions.")
+        f1_drop, macro_drop = {}, 0.0
+    else:
+        f1_drop, macro_drop = compute_metrics(results_no_ambiguous_df, args.conditions)
+
+    print("\n" + "=" * 60)
+    print("Results when we set all ambiguous to negative outputs")
+    print("=" * 60)
+    f1_ambneg, macro_ambneg = compute_metrics(results_amb_to_negative_df, args.conditions)
+
+    # Persist both summaries in metadata JSON
+    meta["evaluation"] = {
+        "n_total_rows": int(len(results_df)),
+        "n_rows_no_ambiguous": int(len(results_no_ambiguous_df)),
+        "drop_ambiguous": {
+            "f1_scores": f1_drop,
+            "macro_f1": macro_drop,
+        },
+        "ambiguous_to_negative": {
+            "f1_scores": f1_ambneg,
+            "macro_f1": macro_ambneg,
+        },
+    }
+
+    # final save with enriched metadata
     save_results_with_meta(all_results, args.output_file, meta)
 
-    return results_df, f1_scores, macro_f1
+    return {
+        "raw_results": results_df,
+        "no_ambiguous_results": results_no_ambiguous_df,
+        "ambiguous_to_negative_results": results_amb_to_negative_df,
+        "metrics": meta["evaluation"],
+    }
