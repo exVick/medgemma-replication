@@ -12,11 +12,11 @@ import torch
 def print_cuda_info() -> None:
     visible = os.environ.get("CUDA_VISIBLE_DEVICES", "N/A")
     print(f"Using GPU with ID:\t{visible}")
-    print(f"CUDA Available:\t{torch.cuda.is_available()}")
+    print(f"CUDA Available:\t\t{torch.cuda.is_available()}")
 
     if torch.cuda.is_available():
         cur = torch.cuda.current_device()
-        print(f"GPU name:\t{torch.cuda.get_device_name(cur)}")
+        print(f"GPU name:\t\t{torch.cuda.get_device_name(cur)}")
     else:
         print("WARNING: No CUDA device available — inference will be very slow or fail.")
     print()
@@ -46,9 +46,9 @@ def check_path(path: str, file: str, i: int = 1) -> Path:
     """
     file_path = Path(path, file)
     if os.path.exists(file_path):
-        new_file = f"{file.rsplit('.', 1)[0]}_{i}.{file.rsplit('.', 1)[1]}"
+        new_file = f"{file.rsplit(f'_{i}', 1)[0]}_{i+1}.{file.rsplit('.', 1)[1]}"
         print(f"File exists: {file_path} -> creating new name: {new_file}")
-        return check_path(path, new_file, i + 1)
+        return check_path(path, new_file, i+1)
     return file_path
 
 
@@ -73,15 +73,15 @@ def save_results_with_meta(
 
     df = pd.DataFrame(results)
     current_month_day = datetime.now().strftime("%m-%d")
-    
     path, file = os.path.dirname(output_file), os.path.basename(output_file)
-    file = current_month_day + "_" + file
     
-    file_path = check_path(path, file)
-    df.to_csv(file_path, index=False)
-    print(f"Saved CSV to {file_path}")
+    csv_name = current_month_day + "_" + file
+    csv_path = check_path(path, csv_name)
+    df.to_csv(csv_path, index=False)
+    print(f"\nSaved CSV to {csv_path}\n")
 
-    json_path = output_file.rsplit(".", 1)[0] + ".json"
+    json_name = current_month_day + "_" + file.rsplit(".", 1)[0] + ".json"
+    json_path = check_path(path, json_name)
     payload = {
         "experiment_meta": {
             k: v for k, v in experiment_meta.items() if k != "start_time"
@@ -90,4 +90,4 @@ def save_results_with_meta(
     }
     with open(json_path, "w") as f:
         json.dump(payload, f, indent=2, default=str)
-    print(f"Saved JSON to {json_path}")
+    print(f"\nSaved JSON to {json_path}")
