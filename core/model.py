@@ -26,7 +26,7 @@ def load_model(
         model_id,
         dtype=float_type,
         quantization_config=quant_config,
-        device_map="cuda",
+        device_map={"": 0},  # explicit single visible GPU - 'cuda' might be ambiguous 
     )
     processor = AutoProcessor.from_pretrained(model_id)
     model.eval()

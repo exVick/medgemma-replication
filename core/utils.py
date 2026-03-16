@@ -9,19 +9,14 @@ import pandas as pd
 import torch
 
 
-def extract_and_set_gpu(gpu_id: str) -> None:
-    """
-    Sets CUDA_VISIBLE_DEVICES based on CLI argument.
-    """
-    os.environ["CUDA_VISIBLE_DEVICES"] = gpu_id
-
-
 def print_cuda_info() -> None:
-    print(f"CUDA_VISIBLE_DEVICES = {os.environ.get('CUDA_VISIBLE_DEVICES', 'N/A')}")
-    print(f"CUDA Available: {torch.cuda.is_available()}")
-    print(f"GPU Count:\t{torch.cuda.device_count()}")
+    visible = os.environ.get("CUDA_VISIBLE_DEVICES", "N/A")
+    print(f"Using GPU with ID:\t{visible}")
+    print(f"CUDA Available:\t{torch.cuda.is_available()}")
+
     if torch.cuda.is_available():
-        print(f"GPU Name:\t{torch.cuda.get_device_name(0)}")
+        cur = torch.cuda.current_device()
+        print(f"GPU name:\t{torch.cuda.get_device_name(cur)}")
     else:
         print("WARNING: No CUDA device available — inference will be very slow or fail.")
     print()
@@ -78,8 +73,10 @@ def save_results_with_meta(
 
     df = pd.DataFrame(results)
     current_month_day = datetime.now().strftime("%m-%d")
+    
     path, file = os.path.dirname(output_file), os.path.basename(output_file)
     file = current_month_day + "_" + file
+    
     file_path = check_path(path, file)
     df.to_csv(file_path, index=False)
     print(f"Saved CSV to {file_path}")

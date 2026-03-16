@@ -1,43 +1,64 @@
+import os
 import argparse
 
-from core.utils import extract_and_set_gpu, print_cuda_info
+def _extract_gpu_arg_early(default: str = "0") -> str:
+    """
+    Parse --gpu from raw argv *before* importing torch or torch-dependent modules.
+    Supports:
+      --gpu 3
+      --gpu=3
+    """
+    import sys
+
+    gpu_id = default
+    argv = sys.argv[1:]
+
+    for i, tok in enumerate(argv):
+        if tok == "--gpu" and i + 1 < len(argv):
+            gpu_id = argv[i + 1]
+            break
+        if tok.startswith("--gpu="):
+            gpu_id = tok.split("=", 1)[1]
+            break
+
+    return gpu_id
+
+
+_EARLY_GPU_ID = _extract_gpu_arg_early()
+os.environ["CUDA_VISIBLE_DEVICES"] = _EARLY_GPU_ID
+
+from core.utils import print_cuda_info
 from core.model import load_model
-from experiments.report_generation import (
+from experiments.cxr_report_generation import (
     add_report_gen_args,
     run_report_generation_experiment,
 )
-from experiments.classification import (
-    add_classification_args,
-    run_classification_experiment,
+from experiments.cxr_image_classification import (
+    add_cxr_classification_args,
+    run_cxr_classification_experiment,
 )
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="MedGemma evaluation reproduction"
+        description="MedGemma thesis experiments: report generation + CXR classification"
     )
 
-    # Global/shared args (available to all subcommands)
     parser.add_argument(
         "--gpu",
         type=str,
-        default="0",
-        help="CUDA device ID to expose as CUDA_VISIBLE_DEVICES (default: 0)",
+        default=_EARLY_GPU_ID,  # reflects what was already applied
+        help="Physical CUDA GPU ID to expose via CUDA_VISIBLE_DEVICES",
     )
 
     sub = parser.add_subparsers(dest="command", required=True)
 
-    # Register task-specific parsers
-    rg = sub.add_parser("report_gen", help="Chest X-ray report generation: MIMIC-CXR")
+    rg = sub.add_parser("report_gen", help="MIMIC-CXR report generation")
     add_report_gen_args(rg)
 
-    cl = sub.add_parser("classify", help="Medical image classification: CheXpert")
-    add_classification_args(cl)
+    cxr = sub.add_parser("cxr_classify", help="CheXpert/CXR image classification")
+    add_cxr_classification_args(cxr)
 
-    # Future experiments:
-    # vqa = sub.add_parser("vqa", help="Visual question answering")
-    # add_vqa_args(vqa)
-    
     return parser
 
 
@@ -45,11 +66,14 @@ def main():
     parser = build_parser()
     args = parser.parse_args()
 
-    # Must happen before model loading
-    extract_and_set_gpu(args.gpu)
+    if args.gpu != _EARLY_GPU_ID:
+        print(
+            f"[WARN] --gpu parsed late as {args.gpu}, but CUDA was initialized with {_EARLY_GPU_ID}. "
+            "Use --gpu at launch time; changing after startup is not supported."
+        )
+
     print_cuda_info()
 
-    # Shared model load for each command
     model, processor, meta = load_model(
         model_id=args.model_id,
         float_type=args.float_type if not args.use_8bit else None,
@@ -57,19 +81,9 @@ def main():
     )
 
     if args.command == "report_gen":
-        run_report_generation_experiment(
-            args=args,
-            model=model,
-            processor=processor,
-            experiment_meta=meta,
-        )
-    elif args.command == "classify":
-        run_classification_experiment(
-            args=args,
-            model=model,
-            processor=processor,
-            experiment_meta=meta,
-        )
+        run_report_generation_experiment(args, model, processor, meta)
+    elif args.command == "cxr_classify":
+        run_cxr_classification_experiment(args, model, processor, meta)
     else:
         raise ValueError(f"Unsupported command: {args.command}")
 

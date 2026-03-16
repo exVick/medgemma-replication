@@ -120,7 +120,6 @@ def run_report_generation_experiment(
 
     print(f"\n{'='*70}")
     print(f"DONE — {len(results_df)} studies")
-    print(f"Results: {args.output_file}")
     _print_length_stats(results_df, sections)
     print(f"{'='*70}")
 
