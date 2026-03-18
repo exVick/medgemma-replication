@@ -32,6 +32,7 @@ from core.utils import print_cuda_info
 from radgraph import F1RadGraph
 import pandas as pd
 import re
+import torch
 
 
 def build_parser() -> argparse.ArgumentParser:
