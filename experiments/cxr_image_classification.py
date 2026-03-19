@@ -5,12 +5,6 @@ Keeps:
 - condition-wise yes/no prompting
 - rule-based parsing
 - per-condition F1 + macro-F1 evaluation (in this same file)
-
-Future extensions can be added here:
-- uncertainty calibration
-- threshold tuning
-- PR/AUC metrics
-- subgroup analysis
 """
 
 import os
@@ -33,8 +27,8 @@ GENERATION_CONFIG = dict(
     do_sample=False,  # greedy deterministic decoding
 )
 
-# Default 5-condition setup (can be overridden via --conditions)
-DEFAULT_CONDITIONS = [
+# Default 5 conditions
+conditions = [
     "Atelectasis",
     "Cardiomegaly",
     "Consolidation",
@@ -43,37 +37,37 @@ DEFAULT_CONDITIONS = [
 ]
 
 
-def add_cxr_classification_args(parser):
-    parser.add_argument("--csv_file", type=str, required=True, help="CheXpert-style CSV")
-    parser.add_argument("--image_dir", type=str, required=True, help="Root image directory")
-    parser.add_argument("--output_file", type=str, default="results_cxr_classification.csv")
-    parser.add_argument("--model_id", type=str, default="google/medgemma-4b-it")
-    parser.add_argument(
-        "--float_type",
-        type=str,
-        default="float32",
-        choices=["bfloat16", "float16", "float32"],
-    )
-    parser.add_argument("--use_8bit", type=bool, default=False, help="True if you want 8-bit model")
-    parser.add_argument("--max_samples", type=int, default=-1, help="-1 = all")
-    parser.add_argument(
-        "--conditions",
-        nargs="+",
-        default=DEFAULT_CONDITIONS,
-        help="Condition columns to evaluate",
-    )
-    parser.add_argument(
-        "--path_col",
-        type=str,
-        default="Path",
-        help="CSV column containing image relative path",
-    )
-    parser.add_argument(
-        "--save_every",
-        type=int,
-        default=50,
-        help="Checkpoint save frequency",
-    )
+# def add_cxr_classification_args(parser):
+#     parser.add_argument("--csv_file", type=str, required=True, help="CheXpert-style CSV")
+#     parser.add_argument("--image_dir", type=str, required=True, help="Root image directory")
+#     parser.add_argument("--output_file", type=str, default="results_cxr_classification.csv")
+#     parser.add_argument("--model_id", type=str, default="google/medgemma-4b-it")
+#     parser.add_argument(
+#         "--float_type",
+#         type=str,
+#         default="float32",
+#         choices=["bfloat16", "float16", "float32"],
+#     )
+#     parser.add_argument("--use_8bit", type=bool, default=False, help="True if you want 8-bit model")
+#     parser.add_argument("--max_samples", type=int, default=-1, help="-1 = all")
+#     parser.add_argument(
+#         "--conditions",
+#         nargs="+",
+#         default=DEFAULT_CONDITIONS,
+#         help="Condition columns to evaluate",
+#     )
+#     parser.add_argument(
+#         "--path_col",
+#         type=str,
+#         default="Path",
+#         help="CSV column containing image relative path",
+#     )
+#     parser.add_argument(
+#         "--save_every",
+#         type=int,
+#         default=50,
+#         help="Checkpoint save frequency",
+#     )
 
 
 def build_messages(condition: str):
@@ -189,23 +183,23 @@ def run_cxr_classification_experiment(args, model, processor, experiment_meta):
     meta = init_experiment_meta(experiment_meta)
 
     # Validate schema
-    required_cols = [args.path_col] + list(args.conditions)
+    required_cols = ['Path'] + conditions
     missing = [c for c in required_cols if c not in df.columns]
     if missing:
         raise ValueError(f"Missing required columns in CSV: {missing}")
 
     all_results = []
 
-    print(f"\nRunning inference on {len(df)} images and {len(args.conditions)} conditions...")
+    print(f"\nRunning inference on {len(df)} images and {len(conditions)} conditions...")
     print("-" * 60)
 
     for idx, row in tqdm(
         df.iterrows(),
         total=len(df),
-        desc="Doctor MedGemma looking over your Chest X-rays",
+        desc="Doctor MedGemma is looking over your Chest X-rays",
         unit="img",
     ):
-        img_path = os.path.join(args.image_dir, row[args.path_col])
+        img_path = os.path.join(args.image_dir, row['Path'])
         if not os.path.exists(img_path):
             print(f"[SKIP] Image not found: {img_path}")
             continue
@@ -213,12 +207,12 @@ def run_cxr_classification_experiment(args, model, processor, experiment_meta):
         image = Image.open(img_path).convert("RGB")
 
         result_row = {
-            "path": row[args.path_col],
+            "path": row['Path'],
             "image_size": f"{image.size[0]}x{image.size[1]}",
         }
 
 
-        for cond in args.conditions:
+        for cond in conditions:
             gt = int(row[cond])
             result_row[f"gt_{cond}"] = gt
 
@@ -243,7 +237,7 @@ def run_cxr_classification_experiment(args, model, processor, experiment_meta):
     results_df = pd.DataFrame(all_results)
 
     # --- Build evaluation variants for ambiguous predictions (-1) ---
-    pred_conditions = [f"pred_{cond}" for cond in args.conditions]
+    pred_conditions = [f"pred_{cond}" for cond in conditions]
 
     # 1) Drop rows where ANY condition prediction is ambiguous
     results_no_ambiguous_df = results_df[
@@ -265,12 +259,12 @@ def run_cxr_classification_experiment(args, model, processor, experiment_meta):
         print("No rows left after dropping ambiguous predictions.")
         f1_drop, macro_drop = {}, 0.0
     else:
-        f1_drop, macro_drop = compute_metrics(results_no_ambiguous_df, args.conditions)
+        f1_drop, macro_drop = compute_metrics(results_no_ambiguous_df, conditions)
 
     print("\n" + "=" * 60)
     print("Results when we set all ambiguous to negative outputs")
     print("=" * 60)
-    f1_ambneg, macro_ambneg = compute_metrics(results_amb_to_negative_df, args.conditions)
+    f1_ambneg, macro_ambneg = compute_metrics(results_amb_to_negative_df, conditions)
 
     # Persist both summaries in metadata JSON
     meta["evaluation"] = {
