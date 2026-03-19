@@ -47,7 +47,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Physical CUDA GPU ID to expose via CUDA_VISIBLE_DEVICES",
     )
 
-    parser.add_argument("--csv_file", type=str, required=True, help="CSV with findings and impression for gt and gen")
+    parser.add_argument("--input", type=str, required=True, help="CSV with findings and impression for gt and gen")
 
     return parser
 
