@@ -13,6 +13,7 @@ In this project I reproduce the following MedGemma evaluation experiments from *
 ```text
 *medgemma-thesis/
 ├── main.py                     # CLI router
+├── f1_radgraph.py              # Evaluation for report gen (Requires RadGraph Env)
 ├── core/                       # Shared backbone
 │   ├── model.py                # model loading + generic inference
 │   └── utils.py                # GPU setup, metadata, save utils
@@ -22,6 +23,15 @@ In this project I reproduce the following MedGemma evaluation experiments from *
 └── config/
     └── prompts.py              # centralized prompt registry
 ```
+
+## Environments & Dependencies
+
+This project requires two separate Conda environments due to conflicting dependency requirements for the RadGraphF1 metric:
+
+`medgemma-main` - use for all general tasks
+
+`medgemma-radgraph` - use only for RadGraphF1 evaluation (f1_radgraph.py)
+
 
 ## Quick Start
 
@@ -43,6 +53,12 @@ python main.py --gpu 0 classify \
   --csv_file /path/to/test_labels.csv \
   --image_dir /path/to/images \
   --output_file results_classify.csv
+```
+
+### RadGraph F1 Evaluation
+
+```bash
+python f1_radgraph.py --input results_report_gen.csv
 ```
 
 ## Notes
