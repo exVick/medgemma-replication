@@ -13,6 +13,7 @@ In this project I reproduce the following MedGemma evaluation experiments from *
 ```text
 *medgemma-thesis/
 ├── main.py                     # CLI router
+├── f1_radgraph.py              # Evaluation script for report generation (needs different environment)
 ├── core/                       # Shared backbone
 │   ├── model.py                # model loading + generic inference
 │   └── utils.py                # GPU setup, metadata, save utils
