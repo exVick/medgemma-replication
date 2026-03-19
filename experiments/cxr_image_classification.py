@@ -193,7 +193,7 @@ def run_cxr_classification_experiment(args, model, processor, experiment_meta):
     print(f"\nRunning inference on {len(df)} images and {len(conditions)} conditions...")
     print("-" * 60)
 
-    for idx, row in tqdm(
+    for _, row in tqdm(
         df.iterrows(),
         total=len(df),
         desc="Doctor MedGemma is looking over your Chest X-rays",
