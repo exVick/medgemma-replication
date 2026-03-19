@@ -141,6 +141,7 @@ def main():
 
     # Initialize RadGraph F1 for RG_ER only (partial-level score)
     f1radgraph = F1RadGraph(reward_level="partial", model_type="radgraph-xl")
+    print("Building KG from gt and gen and comparing them...")
 
     # FINDINGS
     refs_findings = df["findings_gt_clean"].tolist()
@@ -177,7 +178,8 @@ def main():
             "rg_er_full_report": float(rg_er_full),
         },
         "runtime": {
-            "gpu_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES", "N/A"),
+            "gpu_id": os.environ.get("CUDA_VISIBLE_DEVICES", "N/A"),
+            "gpu_name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "N/A",
             "vram_peak_gb": float(round(vram_gb, 4)),
         },
     }
