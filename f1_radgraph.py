@@ -39,7 +39,7 @@ import torch
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="F1-RadGraph score for CXR report generation evaluation"
+        description="F1-RadGraph score for CXR report generation evaluation: DO NOT FORGET TO USE RADGRAPH ENV!"
     )
 
     parser.add_argument(
