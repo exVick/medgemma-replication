@@ -16,6 +16,7 @@ Future extensions can be added here:
 import os
 import time
 from typing import List, Tuple, Dict
+from tqdm import tqdm
 
 import numpy as np
 import pandas as pd
@@ -198,7 +199,12 @@ def run_cxr_classification_experiment(args, model, processor, experiment_meta):
     print(f"\nRunning inference on {len(df)} images and {len(args.conditions)} conditions...")
     print("-" * 60)
 
-    for idx, row in df.iterrows():
+    for idx, row in tqdm(
+        df.iterrows(),
+        total=len(df),
+        desc="Doctor MedGemma looking over your Chest X-rays",
+        unit="img",
+    ):
         img_path = os.path.join(args.image_dir, row[args.path_col])
         if not os.path.exists(img_path):
             print(f"[SKIP] Image not found: {img_path}")
@@ -211,7 +217,6 @@ def run_cxr_classification_experiment(args, model, processor, experiment_meta):
             "image_size": f"{image.size[0]}x{image.size[1]}",
         }
 
-        print(f"\n[{idx+1}/{len(df)}] {row[args.path_col]} (size: {image.size})")
 
         for cond in args.conditions:
             gt = int(row[cond])
