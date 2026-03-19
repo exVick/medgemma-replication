@@ -1,15 +1,11 @@
 import os
+import sys
 import argparse
 
 def _extract_gpu_arg_early(default: str = "0") -> str:
     """
-    Parse --gpu from raw argv *before* importing torch or torch-dependent modules.
-    Supports:
-      --gpu 3
-      --gpu=3
+    Extract GPU early, to limit cuda to only one physical ID (for shared servers with multiple GPUs)
     """
-    import sys
-
     gpu_id = default
     argv = sys.argv[1:]
 
@@ -27,50 +23,55 @@ def _extract_gpu_arg_early(default: str = "0") -> str:
 _EARLY_GPU_ID = _extract_gpu_arg_early()
 os.environ["CUDA_VISIBLE_DEVICES"] = _EARLY_GPU_ID
 
-from core.utils import print_cuda_info
-from core.model import load_model
-from experiments.cxr_report_generation import (
-    add_report_gen_args,
-    run_report_generation_experiment,
-)
-from experiments.cxr_image_classification import (
-    add_cxr_classification_args,
-    run_cxr_classification_experiment,
-)
-
-
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="MedGemma thesis experiments: report generation + CXR classification"
     )
 
-    parser.add_argument(
-        "--gpu",
-        type=str,
-        default=_EARLY_GPU_ID,  # reflects what was already applied
-        help="Physical CUDA GPU ID to expose via CUDA_VISIBLE_DEVICES",
-    )
+    parser.add_argument("--gpu", type=str, default=_EARLY_GPU_ID, help="Physical GPU ID")
 
     sub = parser.add_subparsers(dest="command", required=True)
 
     rg = sub.add_parser("report_gen", help="MIMIC-CXR report generation")
-    add_report_gen_args(rg)
+    rg.add_argument("--parquet_file", type=str, required=True)
+    rg.add_argument("--output_file", type=str, default="results_report_gen.csv")
+    rg.add_argument("--model_id", type=str, default="google/medgemma-4b-it")
+    rg.add_argument("--float_type", type=str, default="bfloat16", choices=["bfloat16", "float16", "float32"])
+    rg.add_argument("--use_8bit", action="store_true")
+    rg.add_argument("--max_new_tokens", type=int, default=512)
+    rg.add_argument("--max_samples", type=int, default=-1, help="-1 = all")
+    rg.add_argument("--save_every", type=int, default=50)
+    rg.add_argument("--sections", nargs="+", default=["findings", "impression"])
 
     cxr = sub.add_parser("cxr_classify", help="CheXpert/CXR image classification")
-    add_cxr_classification_args(cxr)
+    cxr.add_argument("--csv_file", type=str, required=True)
+    cxr.add_argument("--image_dir", type=str, required=True)
+    cxr.add_argument("--output_file", type=str, default="results_cxr_classification.csv")
+    cxr.add_argument("--model_id", type=str, default="google/medgemma-4b-it")
+    cxr.add_argument("--float_type", type=str, default="float32", choices=["bfloat16", "float16", "float32"])
+    cxr.add_argument("--use_8bit", type=bool, default=False, help="True if you want 8-bit model")
+    cxr.add_argument("--max_samples", type=int, default=-1, help="-1 = all")
+    cxr.add_argument("--save_every", type=int, default=50)
 
     return parser
 
 
 def main():
     parser = build_parser()
+
+    if len(sys.argv) == 1:
+        parser.print_help(sys.stderr)
+        print("\nExample:")
+        print("  python main.py --gpu 3 report_gen --parquet_file /path/to/test.parquet")
+        print("  python main.py --gpu 3 cxr_classify --csv_file /path/to/test.csv --image_dir /path/to/images")
+        sys.exit(2)
+
     args = parser.parse_args()
 
-    if args.gpu != _EARLY_GPU_ID:
-        print(
-            f"[WARN] --gpu parsed late as {args.gpu}, but CUDA was initialized with {_EARLY_GPU_ID}. "
-            "Use --gpu at launch time; changing after startup is not supported."
-        )
+    from core.utils import print_cuda_info
+    from core.model import load_model
+    from experiments.cxr_report_generation import run_report_generation_experiment
+    from experiments.cxr_image_classification import run_cxr_classification_experiment
 
     print_cuda_info()
 
