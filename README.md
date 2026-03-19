@@ -49,7 +49,7 @@ python main.py --gpu 3 report_gen \
 ### Classification 
 
 ```bash
-python main.py --gpu 0 classify \
+python main.py --gpu 42 classify \
   --csv_file /path/to/test_labels.csv \
   --image_dir /path/to/images \
   --output_file results_classify.csv
@@ -58,7 +58,7 @@ python main.py --gpu 0 classify \
 ### RadGraph F1 Evaluation
 
 ```bash
-python f1_radgraph.py --input results_report_gen.csv
+python f1_radgraph.py --gpu 8 --input results_report_gen.csv
 ```
 
 ## Notes
