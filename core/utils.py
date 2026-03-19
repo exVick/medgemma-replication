@@ -39,17 +39,19 @@ def init_experiment_meta(base_meta: Dict[str, Any]) -> Dict[str, Any]:
     }
     return meta
 
-
-def check_path(path: str, file: str, i: int = 1) -> Path:
-    """
-    Prevent overwriting existing files by appending suffixes.
-    """
-    file_path = Path(path, file)
-    if os.path.exists(file_path):
-        new_file = f"{file.rsplit(f'_{i}', 1)[0]}_{i+1}.{file.rsplit('.', 1)[1]}"
-        print(f"File exists: {file_path} -> creating new name: {new_file}")
-        return check_path(path, new_file, i+1)
-    return file_path
+#### cool feature but made too much unnecessary copies during checkpoint safety ####
+#### turning it off for now, but keeping it just in case ###########################
+# def check_path(path: str, file: str, i: int = 1) -> Path:
+#     """
+#     Prevent overwriting existing files by appending suffixes.
+#     """
+#     file_path = Path(path, file)
+#     if os.path.exists(file_path):
+#         new_file = f"{file.rsplit(f'_{i}', 1)[0]}_{i+1}.{file.rsplit('.', 1)[1]}"
+#         print(f"File exists: {file_path} -> creating new name: {new_file}")
+#         return check_path(path, new_file, i+1)
+#     return file_path
+####################################################################################
 
 
 def save_results_with_meta(
@@ -76,12 +78,14 @@ def save_results_with_meta(
     path, file = os.path.dirname(output_file), os.path.basename(output_file)
     
     csv_name = current_month_day + "_" + file
-    csv_path = check_path(path, csv_name)
+    # csv_path = check_path(path, csv_name)
+    csv_path = Path(path, csv_name)
     df.to_csv(csv_path, index=False)
     print(f"\nSaved CSV to {csv_path}\n")
 
     json_name = current_month_day + "_" + file.rsplit(".", 1)[0] + ".json"
-    json_path = check_path(path, json_name)
+    # json_path = check_path(path, json_name)
+    json_path = Path(path, json_name)
     payload = {
         "experiment_meta": {
             k: v for k, v in experiment_meta.items() if k != "start_time"
