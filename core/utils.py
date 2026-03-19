@@ -81,7 +81,6 @@ def save_results_with_meta(
     # csv_path = check_path(path, csv_name)
     csv_path = Path(path, csv_name)
     df.to_csv(csv_path, index=False)
-    print(f"\nSaved CSV to {csv_path}\n")
 
     json_name = current_month_day + "_" + file.rsplit(".", 1)[0] + ".json"
     # json_path = check_path(path, json_name)
@@ -94,4 +93,5 @@ def save_results_with_meta(
     }
     with open(json_path, "w") as f:
         json.dump(payload, f, indent=2, default=str)
-    print(f"\nSaved JSON to {json_path}")
+
+    return csv_path, json_path

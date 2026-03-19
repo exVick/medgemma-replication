@@ -37,39 +37,6 @@ conditions = [
 ]
 
 
-# def add_cxr_classification_args(parser):
-#     parser.add_argument("--csv_file", type=str, required=True, help="CheXpert-style CSV")
-#     parser.add_argument("--image_dir", type=str, required=True, help="Root image directory")
-#     parser.add_argument("--output_file", type=str, default="results_cxr_classification.csv")
-#     parser.add_argument("--model_id", type=str, default="google/medgemma-4b-it")
-#     parser.add_argument(
-#         "--float_type",
-#         type=str,
-#         default="float32",
-#         choices=["bfloat16", "float16", "float32"],
-#     )
-#     parser.add_argument("--use_8bit", type=bool, default=False, help="True if you want 8-bit model")
-#     parser.add_argument("--max_samples", type=int, default=-1, help="-1 = all")
-#     parser.add_argument(
-#         "--conditions",
-#         nargs="+",
-#         default=DEFAULT_CONDITIONS,
-#         help="Condition columns to evaluate",
-#     )
-#     parser.add_argument(
-#         "--path_col",
-#         type=str,
-#         default="Path",
-#         help="CSV column containing image relative path",
-#     )
-#     parser.add_argument(
-#         "--save_every",
-#         type=int,
-#         default=50,
-#         help="Checkpoint save frequency",
-#     )
-
-
 def build_messages(condition: str):
     prompt = PROMPTS["classify_condition"].format(condition=condition.lower())
     return [
@@ -281,7 +248,9 @@ def run_cxr_classification_experiment(args, model, processor, experiment_meta):
     }
 
     # final save with enriched metadata
-    save_results_with_meta(all_results, args.output_file, meta)
+    csv_path, json_path = save_results_with_meta(all_results, args.output_file, meta)
+    print(f"\nSaved CSV to {csv_path}")
+    print(f"\nSaved JSON to {json_path}")
 
     return {
         "raw_results": results_df,

@@ -11,23 +11,6 @@ from core.utils import init_experiment_meta, save_results_with_meta
 from config.prompts import PROMPTS
 
 
-# def add_report_gen_args(parser):
-#     parser.add_argument("--parquet_file", type=str, required=True)
-#     parser.add_argument("--output_file", type=str, default="results_report_gen.csv")
-#     parser.add_argument("--model_id", type=str, default="google/medgemma-4b-it")
-#     parser.add_argument(
-#         "--float_type",
-#         type=str,
-#         default="bfloat16",
-#         choices=["bfloat16", "float16", "float32"],
-#     )
-#     parser.add_argument("--use_8bit", action="store_true")
-#     parser.add_argument("--max_new_tokens", type=int, default=512)
-#     parser.add_argument("--max_samples", type=int, default=-1)
-#     parser.add_argument("--save_every", type=int, default=50)
-#     parser.add_argument("--sections", nargs="+", default=["findings", "impression"])
-
-
 def load_report_gen_dataset(parquet_file: str, max_samples: int = -1) -> pd.DataFrame:
     df = pd.read_parquet(parquet_file)
     print(f"Loaded parquet: {len(df)} rows, columns: {list(df.columns)}")
@@ -54,8 +37,8 @@ def _print_length_stats(df: pd.DataFrame, sections: List[str]):
         gen_len = df[f"{s}_gen"].str.len()
         t = df[f"time_{s}_s"]
         print(f"  {s:12s}  GT  chars: mean={gt_len.mean():.0f}  median={gt_len.median():.0f}")
-        print(f"  {s:12s}  GEN chars: mean={gen_len.mean():.0f}  median={gen_len.median():.0f}")
-        print(f"  {s:12s}  time:      mean={t.mean():.1f}s  total={t.sum():.0f}s")
+        print(f"  {s:12s}  GEN chars: mean={gen_len.mean():.0f} median={gen_len.median():.0f}")
+        print(f"  {s:12s}  time:      mean={t.mean():.1f}s      total={t.sum():.0f}s")
 
 
 def run_report_generation_experiment(
@@ -119,7 +102,10 @@ def run_report_generation_experiment(
         if n_done % args.save_every == 0:
             save_results_with_meta(all_results, args.output_file, meta)
 
-    save_results_with_meta(all_results, args.output_file, meta)
+    csv_path, json_path = save_results_with_meta(all_results, args.output_file, meta)
+    print(f"\nSaved CSV to {csv_path}")
+    print(f"\nSaved JSON to {json_path}")
+
     results_df = pd.DataFrame(all_results)
 
     print(f"\n{'='*70}")
