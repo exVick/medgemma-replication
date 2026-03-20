@@ -62,10 +62,12 @@ def run_inference(
     Generic single-image inference used by all tasks.
     """
     messages = [
-        # {
-        # "role": "system",
-        # "content": [{"type": "text", "text": "You are an expert radiologist."}]
-        # },
+        {
+            "role": "system",
+            "content": [
+                {"type": "text", "text": "You are a helpful medical assistant."}
+            ],
+        },
         {
             "role": "user",
             "content": [
