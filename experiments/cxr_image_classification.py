@@ -11,6 +11,7 @@ import os
 import time
 from typing import List, Tuple, Dict
 from tqdm import tqdm
+import re
 
 import numpy as np
 import pandas as pd
@@ -82,22 +83,95 @@ def run_inference_single(model, processor, image: Image.Image, condition: str) -
     return response.strip()
 
 
+# def parse_yes_no(text: str) -> int:
+#     """
+#     Parse model output into CheXpert-style label:
+#       1 = positive
+#       0 = negative
+#      -1 = ambiguous/uncertain
+#     """
+#     t = (text or "").strip().lower()
+
+#     if t.startswith("yes"):
+#         return 1
+#     if t.startswith("no"):
+#         return 0
+
+#     positive_keywords = ["yes", "present", "positive", "consistent with", "suggests", "shows"]
+#     negative_keywords = ["no", "absent", "negative", "not present", "no evidence", "unremarkable"]
+
+#     has_positive = any(kw in t for kw in positive_keywords)
+#     has_negative = any(kw in t for kw in negative_keywords)
+
+#     if has_positive and not has_negative:
+#         return 1
+#     if has_negative and not has_positive:
+#         return 0
+
+#     return -1
+
 def parse_yes_no(text: str) -> int:
     """
-    Parse model output into CheXpert-style label:
+    Parse model output into:
       1 = positive
       0 = negative
      -1 = ambiguous/uncertain
+
+    Priority:
+    1) Parse explicit 'Final Answer: X'
+    2) Parse tail segment after final answer marker
+    3) Fallback keyword logic on full text
     """
     t = (text or "").strip().lower()
+    if not t:
+        return -1
 
+    # 1) Explicit final answer format
+    # Examples:
+    #   "Final Answer: Yes"
+    #   "Final answer: No"
+    #   "Final Answer: A" (if model outputs options)
+    m = re.search(r"final\s*answer\s*:\s*([^\n\r.;,]+)", t, flags=re.IGNORECASE)
+    if m:
+        ans = m.group(1).strip().lower()
+
+        # normalize common punctuation
+        ans = re.sub(r"[^a-z0-9\s]", "", ans).strip()
+
+        # direct yes/no
+        if ans.startswith("yes"):
+            return 1
+        if ans.startswith("no"):
+            return 0
+
+        # option-letter support (if model invents choices)
+        # conservative mapping: positive-like options
+        if ans in {"a", "1", "positive", "present"}:
+            return 1
+        if ans in {"b", "0", "negative", "absent"}:
+            return 0
+
+    # 2) If "final answer" exists but regex missed, inspect trailing chunk
+    idx = t.rfind("final answer")
+    if idx != -1:
+        tail = t[idx:]
+        if "yes" in tail:
+            return 1
+        if "no" in tail:
+            return 0
+
+    # 3) Fallback on full text
     if t.startswith("yes"):
         return 1
     if t.startswith("no"):
         return 0
 
-    positive_keywords = ["yes", "present", "positive", "consistent with", "suggests", "shows"]
-    negative_keywords = ["no", "absent", "negative", "not present", "no evidence", "unremarkable"]
+    positive_keywords = [
+        "yes", "present", "positive", "consistent with", "suggests", "shows", "seen"
+    ]
+    negative_keywords = [
+        "no", "absent", "negative", "not present", "no evidence", "unremarkable", "without"
+    ]
 
     has_positive = any(kw in t for kw in positive_keywords)
     has_negative = any(kw in t for kw in negative_keywords)

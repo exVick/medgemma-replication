@@ -86,7 +86,7 @@ def run_inference(
     inputs = processor(
         text=prompt,
         images=image,
-        return_tensors="pt",
+        return_tensors="pt", 
     ).to(model.device)
 
     # Match pixel dtype to model dtype
