@@ -13,24 +13,34 @@ from config.prompts import PROMPTS
 
 def load_report_gen_dataset(parquet_file: str, max_samples: int = -1) -> pd.DataFrame:
     df = pd.read_parquet(parquet_file)
-    print(f"Loaded parquet: {len(df)} rows, columns: {list(df.columns)}")
+    print(f"Loaded parquet: {len(df)} rows")
 
-    df["findings"] = df["findings"].fillna("").astype(str).str.strip()
-    df["impression"] = df["impression"].fillna("").astype(str).str.strip()
+    # normalize text cols
+    for c in ["findings", "impression", "indication"]:
+        if c in df.columns:
+            df[c] = df[c].fillna("").astype(str).str.strip()
+        else:
+            df[c] = ""
 
+    # Keep rows with any GT report text
     mask = (df["findings"].str.len() > 0) | (df["impression"].str.len() > 0)
-    n_before = len(df)
     df = df[mask].reset_index(drop=True)
-    print(f"Dropped {n_before - len(df)} rows with empty findings AND impression")
 
     if max_samples > 0:
         df = df.head(max_samples).reset_index(drop=True)
-        print(f"Limiting to {max_samples} samples")
 
     print(f"Final dataset: {len(df)} studies")
     return df
 
 
+def _build_prompt_from_indication(indication: str) -> str:
+    indication = (indication or "").strip()
+    # Avoid empty leading prompt
+    if not indication:
+        indication = "Chest x-ray"
+    return PROMPTS["findings_and_impression"].format(indication=indication)
+
+    
 def _print_length_stats(df: pd.DataFrame, sections: List[str]):
     for s in sections:
         gt_len = df[f"{s}_gt"].str.len()
@@ -69,30 +79,42 @@ def run_report_generation_experiment(
 
         image = Image.open(img_path).convert("RGB")
 
+        indication = row.get("indication", "")
+        prompt = _build_prompt_from_indication(indication)
+
+        findings_gt = row.get("findings", "")
+        impression_gt = row.get("impression", "")
+        full_gt = f"{findings_gt} {impression_gt}".strip()
+
+        t0 = time.time()
+        full_gen = run_inference(
+            model=model,
+            processor=processor,
+            image=image,
+            prompt_text=prompt,
+            max_new_tokens=args.max_new_tokens,
+            do_sample=False,
+        )
+        elapsed = time.time() - t0
+
         result = {
-            "study_id": row["study_id"],
-            "dicom_id": row["dicom_id"],
-            "subject_id": row["subject_id"],
+            "study_id": row.get("study_id", ""),
+            "dicom_id": row.get("dicom_id", ""),
+            "subject_id": row.get("subject_id", ""),
             "local_image_path": img_path,
+            "indication": indication,
+            "prompt_used": prompt,
+
+            # keep original GT columns (needed for downstream scripts if any)
+            "findings_gt": findings_gt,
+            "impression_gt": impression_gt,
+
+            # new combined output
+            "full_gt": full_gt,
+            "full_gen": full_gen,
+            "time_full_s": round(elapsed, 2),
         }
-
-        for section in sections:
-            result[f"{section}_gt"] = row.get(section, "")
-
-            t0 = time.time()
-            gen_text = run_inference(
-                model=model,
-                processor=processor,
-                image=image,
-                prompt_text=PROMPTS[section],
-                max_new_tokens=args.max_new_tokens,
-                do_sample=False,
-            )
-            elapsed = time.time() - t0
-
-            result[f"{section}_gen"] = gen_text
-            result[f"time_{section}_s"] = round(elapsed, 2)
-
+        
         all_results.append(result)
         n_done = len(all_results)
 
