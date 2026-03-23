@@ -6,7 +6,7 @@ from tqdm import tqdm
 import pandas as pd
 from PIL import Image
 
-from core.model import run_inference
+from core.model import run_inference, is_pt_model
 from core.utils import init_experiment_meta, save_results_with_meta
 from config.prompts import PROMPTS
 
@@ -66,6 +66,8 @@ def run_report_generation_experiment(
     print(f"Sections: {sections}")
     print(f"{'='*70}\n")
 
+    use_plain_prompt = is_pt_model(args.model_id)
+
     for _, row in tqdm(
         df.iterrows(),
         total=len(df),
@@ -94,6 +96,7 @@ def run_report_generation_experiment(
             prompt_text=prompt,
             max_new_tokens=args.max_new_tokens,
             do_sample=False,
+            use_plain_prompt=use_plain_prompt,
         )
         elapsed = time.time() - t0
 
