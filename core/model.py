@@ -1,8 +1,19 @@
 from typing import Optional, Tuple, Dict, Any
-
 import torch
 from PIL import Image
 from transformers import AutoModelForImageTextToText, AutoProcessor, BitsAndBytesConfig
+
+
+# Allowed PT models that (plain-string prompting)
+PT_MODEL_IDS = {
+    "google/medgemma-4b-pt",
+    "google/medgemma-27b-pt",
+    # add more later
+}
+
+
+def is_pt_model(model_id: str) -> bool:
+    return model_id in PT_MODEL_IDS
 
 
 def load_model(
@@ -40,10 +51,11 @@ def load_model(
         "float_type": str(float_type),
         "use_8bit": use_8bit,
         "vram_after_load_gb": round(vram_after_load, 3) if vram_after_load else None,
+        "prompt_mode": "plain_pt" if is_pt_model(model_id) else "chat_it",
     }
 
     print(
-        f"Loaded '{model_id}' | dtype={float_type} | 8-bit={use_8bit}"
+        f"Loaded '{model_id}' | mode={meta['prompt_mode']} | dtype={float_type} | 8-bit={use_8bit}"
         + (f" | VRAM after load: {vram_after_load:.2f} GB" if vram_after_load else "")
     )
 
@@ -57,31 +69,42 @@ def run_inference(
     prompt_text: str,
     max_new_tokens: int = 512,
     do_sample: bool = False,
+    use_plain_prompt: bool = False,
 ) -> str:
     """
     Generic single-image inference used by all tasks.
-    """
-    messages = [
-        {
-            "role": "system",
-            "content": [
-                {"type": "text", "text": "You are a helpful medical assistant."}
-            ],
-        },
-        {
-            "role": "user",
-            "content": [
-                {"type": "image"},
-                {"type": "text", "text": prompt_text},
-            ],
-        }
-    ]
 
-    prompt = processor.apply_chat_template(
-        messages,
-        add_generation_prompt=True,
-        tokenize=False,
-    )
+    - use_plain_prompt=False: chat-template flow (IT models)
+    - use_plain_prompt=True : plain text flow (PT models)
+    """
+    if use_plain_prompt:
+        # PT path: no messages dict, no apply_chat_template, only this image token worked
+        image_token = "<start_of_image>"
+        prompt = f"{image_token}\n{prompt_text}".strip()
+    else:
+        # IT/chat path
+        print("plain prompt:", use_plain_prompt)
+        messages = [
+            {
+                "role": "system",
+                "content": [
+                    {"type": "text", "text": "You are a helpful medical assistant."}
+                ],
+            },
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image"},
+                    {"type": "text", "text": prompt_text},
+                ],
+            }
+        ]
+
+        prompt = processor.apply_chat_template(
+            messages,
+            add_generation_prompt=True,
+            tokenize=False,
+        )
 
     inputs = processor(
         text=prompt,
