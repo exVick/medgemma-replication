@@ -40,16 +40,6 @@ def _build_prompt_from_indication(indication: str) -> str:
         indication = "Chest x-ray"
     return PROMPTS["findings_and_impression"].format(indication=indication)
 
-    
-def _print_length_stats(df: pd.DataFrame, sections: List[str]):
-    for s in sections:
-        gt_len = df[f"{s}_gt"].str.len()
-        gen_len = df[f"{s}_gen"].str.len()
-        t = df[f"time_{s}_s"]
-        print(f"  {s:12s}  GT  chars: mean={gt_len.mean():.0f}  median={gt_len.median():.0f}")
-        print(f"  {s:12s}  GEN chars: mean={gen_len.mean():.0f} median={gen_len.median():.0f}")
-        print(f"  {s:12s}  time:      mean={t.mean():.1f}s      total={t.sum():.0f}s")
-
 
 def run_report_generation_experiment(
     args, model, processor, experiment_meta
@@ -135,6 +125,5 @@ def run_report_generation_experiment(
 
     print(f"\n{'='*70}")
     print(f"DONE — {len(results_df)} studies")
-    _print_length_stats(results_df, sections)
     print(f"{'='*70}")
 
