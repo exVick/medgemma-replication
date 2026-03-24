@@ -143,22 +143,25 @@ def main():
         )
         print(f"RG_ER (Full report): {rg_er_full:.4f}")
 
-        # Optional: if old columns also exist, compute section-level too
-        if has_cols(df, ["findings_gt", "findings_gen", "impression_gt", "impression_gen"]):
+        # if old columns also exist, compute section-level too
+        if has_cols(df, ["findings_gt", "findings_gen"]):
             df["findings_gt_clean"] = df["findings_gt"].apply(clean_gt_text)
             df["findings_gen_clean"] = df["findings_gen"].apply(clean_generated_text)
-            df["impression_gt_clean"] = df["impression_gt"].apply(clean_gt_text)
-            df["impression_gen_clean"] = df["impression_gen"].apply(clean_generated_text)
 
             rg_er_findings, _, _, _ = f1radgraph(
                 hyps=df["findings_gen_clean"].tolist(),
                 refs=df["findings_gt_clean"].tolist(),
             )
+            print(f"RG_ER (Findings): {rg_er_findings:.4f}")
+
+        if has_cols(df, ["impression_gt", "impression_gen"]):
+            df["impression_gt_clean"] = df["impression_gt"].apply(clean_gt_text)
+            df["impression_gen_clean"] = df["impression_gen"].apply(clean_generated_text)
+
             rg_er_impr, _, _, _ = f1radgraph(
                 hyps=df["impression_gen_clean"].tolist(),
                 refs=df["impression_gt_clean"].tolist(),
             )
-            print(f"RG_ER (Findings): {rg_er_findings:.4f}")
             print(f"RG_ER (Impression): {rg_er_impr:.4f}")
 
     # -------- OLD schema fallback: findings/impression --------
