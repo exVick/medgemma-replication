@@ -108,6 +108,20 @@ def has_cols(df: pd.DataFrame, cols):
     return all(c in df.columns for c in cols)
 
 
+def score_rg_all(f1radgraph, hyps, refs):
+    """
+    Returns dict with RG_E, RG_ER and RG_ER_BAR.
+    reward_level='all' => (simple, partial, complete)
+    """
+    mean_reward, _, _, _ = f1radgraph(hyps=hyps, refs=refs)
+    rg_e, rg_er, rg_complete = mean_reward
+    return {
+        "rg_e": float(rg_e),
+        "rg_er": float(rg_er),
+        "rg_er_bar": float(rg_complete),
+    }
+
+
 def main():
     parser = build_parser()
     args = parser.parse_args()
@@ -122,13 +136,15 @@ def main():
 
     df = pd.read_csv(args.input)
 
-    # Use RG_ER only
-    f1radgraph = F1RadGraph(reward_level="partial", model_type="radgraph-xl")
+    # all levels so we can report RG_E and RG_ER
+    f1radgraph = F1RadGraph(reward_level="all", model_type="radgraph-xl")
 
-    rg_er_findings = None
-    rg_er_impr = None
-    rg_er_full = None
     schema_mode = None
+    scores = {
+        "full_report": None,
+        "findings": None,
+        "impression": None,
+    }
 
     # -------- NEW schema preferred: full_gt/full_gen --------
     if has_cols(df, ["full_gt", "full_gen"]):
@@ -137,32 +153,38 @@ def main():
         df["full_gt_clean"] = df["full_gt"].apply(clean_gt_text)
         df["full_gen_clean"] = df["full_gen"].apply(clean_generated_text)
 
-        rg_er_full, _, _, _ = f1radgraph(
+        scores["full_report"] = score_rg_all(
+            f1radgraph,
             hyps=df["full_gen_clean"].tolist(),
             refs=df["full_gt_clean"].tolist(),
         )
-        print(f"RG_ER (Full report): {rg_er_full:.4f}")
+        print(f"RG_E (Full report):  {scores['full_report']['rg_e']:.2f}")
+        print(f"RG_ER (Full report): {scores['full_report']['rg_er']:.2f}")
 
         # if old columns also exist, compute section-level too
         if has_cols(df, ["findings_gt", "findings_gen"]):
             df["findings_gt_clean"] = df["findings_gt"].apply(clean_gt_text)
             df["findings_gen_clean"] = df["findings_gen"].apply(clean_generated_text)
 
-            rg_er_findings, _, _, _ = f1radgraph(
+            scores["findings"] = score_rg_all(
+                f1radgraph,
                 hyps=df["findings_gen_clean"].tolist(),
                 refs=df["findings_gt_clean"].tolist(),
             )
-            print(f"RG_ER (Findings): {rg_er_findings:.4f}")
+            print(f"RG_E (Findings):    {scores['findings']['rg_e']:.2f}")
+            print(f"RG_ER (Findings):   {scores['findings']['rg_er']:.2f}")
 
         if has_cols(df, ["impression_gt", "impression_gen"]):
             df["impression_gt_clean"] = df["impression_gt"].apply(clean_gt_text)
             df["impression_gen_clean"] = df["impression_gen"].apply(clean_generated_text)
 
-            rg_er_impr, _, _, _ = f1radgraph(
+            scores["impression"] = score_rg_all(
+                f1radgraph,
                 hyps=df["impression_gen_clean"].tolist(),
                 refs=df["impression_gt_clean"].tolist(),
             )
-            print(f"RG_ER (Impression): {rg_er_impr:.4f}")
+            print(f"RG_E (Impression):  {scores['impression']['rg_e']:.2f}")
+            print(f"RG_ER (Impression): {scores['impression']['rg_er']:.2f}")
 
     # -------- OLD schema fallback: findings/impression --------
     elif has_cols(df, ["findings_gt", "findings_gen", "impression_gt", "impression_gen"]):
@@ -173,26 +195,32 @@ def main():
         df["impression_gt_clean"] = df["impression_gt"].apply(clean_gt_text)
         df["impression_gen_clean"] = df["impression_gen"].apply(clean_generated_text)
 
-        rg_er_findings, _, _, _ = f1radgraph(
+        scores["findings"] = score_rg_all(
+            f1radgraph,
             hyps=df["findings_gen_clean"].tolist(),
             refs=df["findings_gt_clean"].tolist(),
         )
-        rg_er_impr, _, _, _ = f1radgraph(
+        scores["impression"] = score_rg_all(
+            f1radgraph,
             hyps=df["impression_gen_clean"].tolist(),
             refs=df["impression_gt_clean"].tolist(),
         )
-        print(f"RG_ER (Findings): {rg_er_findings:.4f}")
-        print(f"RG_ER (Impression): {rg_er_impr:.4f}")
+        print(f"RG_E (Findings):    {scores['findings']['rg_e']:.2f}")
+        print(f"RG_ER (Findings):   {scores['findings']['rg_er']:.2f}")
+        print(f"RG_E (Impression):  {scores['impression']['rg_e']:.2f}")
+        print(f"RG_ER (Impression): {scores['impression']['rg_er']:.2f}")
 
-        # Construct full text from separate sections
+        # Construct full report from separately generated sections
         df["full_gt_clean"] = (df["findings_gt_clean"] + " " + df["impression_gt_clean"]).str.strip()
         df["full_gen_clean"] = (df["findings_gen_clean"] + " " + df["impression_gen_clean"]).str.strip()
 
-        rg_er_full, _, _, _ = f1radgraph(
+        scores["full_report"] = score_rg_all(
+            f1radgraph,
             hyps=df["full_gen_clean"].tolist(),
             refs=df["full_gt_clean"].tolist(),
         )
-        print(f"RG_ER (Findings + Impression): {rg_er_full:.4f}")
+        print(f"RG_E (Full report):  {scores['full_report']['rg_e']:.2f}")
+        print(f"RG_ER (Full report): {scores['full_report']['rg_er']:.2f}")
 
     else:
         raise ValueError(
@@ -211,12 +239,8 @@ def main():
         "schema_mode": schema_mode,
         "n_samples": int(len(df)),
         "model_type": "radgraph-xl",
-        "reward_level": "partial",
-        "scores": {
-            "rg_er_findings": float(rg_er_findings) if rg_er_findings is not None else None,
-            "rg_er_impression": float(rg_er_impr) if rg_er_impr is not None else None,
-            "rg_er_full_report": float(rg_er_full) if rg_er_full is not None else None,
-        },
+        "reward_level": "all",
+        "scores": scores,
         "runtime": {
             "gpu_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES", "N/A"),
             "vram_peak_gb": float(round(vram_gb, 4)),
