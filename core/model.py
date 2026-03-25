@@ -4,7 +4,7 @@ from PIL import Image
 from transformers import AutoModelForImageTextToText, AutoProcessor, BitsAndBytesConfig
 
 
-# Allowed PT models that (plain-string prompting)
+# Allowed PT models (plain-string prompting)
 PT_MODEL_IDS = {
     "google/medgemma-4b-pt",
     "google/medgemma-27b-pt",
@@ -68,7 +68,7 @@ def run_inference(
     image: Image.Image,
     prompt_text: str,
     max_new_tokens: int = 512,
-    do_sample: bool = False,
+    do_sample: bool = False,   # greedy decoding (as in paper)
     use_plain_prompt: bool = False,
 ) -> str:
     """
