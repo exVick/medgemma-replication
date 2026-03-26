@@ -64,11 +64,3 @@ python f1_radgraph.py --gpu 8 --input results_report_gen.csv
 ## Notes
 
 - `--gpu` is parsed before CUDA initialization and mapped to `CUDA_VISIBLE_DEVICES` to facilitate work on shared servers with multiple GPUs.
-
-## Future work
-
-- Add additional experiments under `experiments/`:
-    - Agentic behaviour
-- Add experiment-specific metrics modules (`metrics/`):
-    - RadGraph with its own env
-- Add logging abstraction (`core/logging.py`) and environments management.
