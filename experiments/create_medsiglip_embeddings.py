@@ -10,6 +10,7 @@ import torch
 import torch.nn.functional as F
 from PIL import Image
 from tqdm import tqdm
+from torch.utils.data import DataLoader, Dataset
 from transformers import AutoImageProcessor, AutoModel
 
 
@@ -24,14 +25,17 @@ def _load_and_prepare_dataset(csv_file: str, max_patients: int = -1) -> pd.DataF
     df["patient_num"] = pd.to_numeric(
         df["Path"].str.extract(r"patient(\d+)")[0], errors="coerce"
     )
-    df = df[df["patient_num"].between(1, max_patients)].copy()
+    if max_patients is None or max_patients < 1:
+        df = df[df["patient_num"] >= 1].copy()
+        filter_note = "patient_num >= 1 (no upper limit)"
+    else:
+        df = df[df["patient_num"].between(1, max_patients)].copy()
+        filter_note = f"between(1, {max_patients})"
 
     # Strip first two folders from source paths before joining with image_dir.
     df["Path_short"] = df["Path"].str.replace(r"^(?:[^/]+/){2}", "", regex=True)
 
-    print(
-        f"Applied patient_num filter: between(1, {max_patients}) -> {len(df)} rows"
-    )
+    print(f"Applied patient_num filter: {filter_note} -> {len(df)} rows")
 
     df = df.reset_index(drop=True)
     print(
@@ -79,6 +83,7 @@ def _save_progress(
     output_parquet: Path,
     output_json: Path,
     meta: Dict[str, Any],
+    write_parquet: bool,
 ) -> Tuple[Path, Path]:
     if meta.get("start_time") is not None:
         meta["total_runtime_s"] = round(time.time() - meta["start_time"], 2)
@@ -92,8 +97,9 @@ def _save_progress(
         if pd.notna(r.get("patient_num"))
     }
 
-    df_out = _serialize_for_parquet(successful_records)
-    df_out.to_parquet(output_parquet, index=False)
+    if write_parquet:
+        df_out = _serialize_for_parquet(successful_records)
+        df_out.to_parquet(output_parquet, index=False)
 
     payload = {
         "experiment_meta": {k: v for k, v in meta.items() if k != "start_time"},
@@ -104,6 +110,7 @@ def _save_progress(
             },
             "unsuccessful_embeddings": unsuccessful_records,
             "output_parquet": str(output_parquet),
+            "parquet_written": write_parquet,
         },
     }
 
@@ -111,6 +118,68 @@ def _save_progress(
         json.dump(payload, f, indent=2, default=str)
 
     return output_parquet, output_json
+
+
+class _ImagePathDataset(Dataset):
+    def __init__(self, rows: List[Dict[str, Any]], image_dir: str):
+        self.rows = rows
+        self.image_dir = image_dir
+
+    def __len__(self) -> int:
+        return len(self.rows)
+
+    def __getitem__(self, idx: int) -> Dict[str, Any]:
+        row_dict = dict(self.rows[idx])
+        source_path = str(row_dict["Path"])
+        short_path = str(row_dict["Path_short"])
+        full_path = os.path.join(self.image_dir, short_path)
+
+        row_dict["source_image_path"] = source_path
+        row_dict["resolved_image_path"] = full_path
+
+        if not os.path.exists(full_path):
+            return {
+                "ok": False,
+                "failure": {
+                    "path": source_path,
+                    "path_short": short_path,
+                    "patient_num": int(row_dict["patient_num"]),
+                    "reason": "file_not_found",
+                },
+            }
+
+        try:
+            with Image.open(full_path) as im:
+                image = im.convert("RGB")
+            return {"ok": True, "row": row_dict, "image": image}
+        except Exception as exc:
+            return {
+                "ok": False,
+                "failure": {
+                    "path": source_path,
+                    "path_short": short_path,
+                    "patient_num": int(row_dict["patient_num"]),
+                    "reason": "image_open_error",
+                    "error": str(exc),
+                },
+            }
+
+
+def _collate_loaded_items(
+    batch: List[Dict[str, Any]],
+) -> Tuple[List[Dict[str, Any]], List[Image.Image], List[Dict[str, Any]]]:
+    valid_records: List[Dict[str, Any]] = []
+    valid_images: List[Image.Image] = []
+    failed_records: List[Dict[str, Any]] = []
+
+    for item in batch:
+        if item.get("ok"):
+            valid_records.append(item["row"])
+            valid_images.append(item["image"])
+        else:
+            failed_records.append(item["failure"])
+
+    return valid_records, valid_images, failed_records
 
 
 def _prepare_batch_records(
@@ -160,7 +229,11 @@ def _prepare_batch_records(
 
 
 def _embed_batch(processor, model, device, images: List[Image.Image]) -> torch.Tensor:
-    inputs = processor(images=images, return_tensors="pt").to(device)
+    cpu_inputs = processor(images=images, return_tensors="pt")
+    inputs = {
+        name: tensor.to(device, non_blocking=True)
+        for name, tensor in cpu_inputs.items()
+    }
     outputs = model.vision_model(**inputs)
     image_embeds = outputs.pooler_output
     embeddings = F.normalize(image_embeds, p=2, dim=-1)
@@ -188,6 +261,8 @@ def run_medsiglip_embeddings_experiment(args):
         "batch_size": args.batch_size,
         "max_patients": args.max_patients,
         "save_every_batches": args.save_every,
+        "num_workers": None,
+        "prefetch_factor": None,
         "csv_file": args.csv_file,
         "image_dir": args.image_dir,
         "vram_after_load_gb": (
@@ -210,7 +285,12 @@ def run_medsiglip_embeddings_experiment(args):
     if total_rows == 0:
         print("No rows to process after filtering. Writing empty outputs.")
         parquet_path, json_path = _save_progress(
-            successful_records, unsuccessful_records, output_parquet, output_json, meta
+            successful_records,
+            unsuccessful_records,
+            output_parquet,
+            output_json,
+            meta,
+            write_parquet=True,
         )
         print(f"Saved parquet to {parquet_path}")
         print(f"Saved metadata JSON to {json_path}")
@@ -218,24 +298,54 @@ def run_medsiglip_embeddings_experiment(args):
 
     batch_size = max(1, args.batch_size)
     save_every_batches = max(1, args.save_every)
-    num_batches = (total_rows + batch_size - 1) // batch_size
+
+    default_workers = max(1, min(8, (os.cpu_count() or 4) // 2))
+    num_workers = max(0, int(getattr(args, "num_workers", default_workers)))
+    prefetch_factor = max(2, int(getattr(args, "prefetch_factor", 4)))
+    pin_memory = bool(getattr(args, "pin_memory", torch.cuda.is_available()))
+
+    meta["num_workers"] = num_workers
+    meta["prefetch_factor"] = prefetch_factor if num_workers > 0 else None
+
+    dataset = _ImagePathDataset(df.to_dict("records"), args.image_dir)
+    loader_kwargs: Dict[str, Any] = {
+        "dataset": dataset,
+        "batch_size": batch_size,
+        "shuffle": False,
+        "num_workers": num_workers,
+        "pin_memory": pin_memory,
+        "collate_fn": _collate_loaded_items,
+        "drop_last": False,
+    }
+    if num_workers > 0:
+        loader_kwargs["prefetch_factor"] = prefetch_factor
+        loader_kwargs["persistent_workers"] = True
+
+    dataloader = DataLoader(**loader_kwargs)
+    num_batches = len(dataloader)
 
     print(
         f"Starting embedding extraction: {total_rows} rows in {num_batches} batches "
-        f"(batch_size={batch_size}, save_every={save_every_batches} batches)"
+        f"(batch_size={batch_size}, save_every={save_every_batches} batches, "
+        f"num_workers={num_workers}, pin_memory={pin_memory})"
     )
 
-    with torch.no_grad():
-        for batch_idx, start in enumerate(
-            tqdm(range(0, total_rows, batch_size), desc="Extracting MedSigLIP embeddings", unit="batch"),
+    current_month_day = datetime.now().strftime("%m-%d")
+    
+    path, file = os.path.dirname(output_parquet), os.path.basename(output_parquet)
+    parquet_name = current_month_day + "_" + file
+    output_parquet = Path(path, parquet_name)
+
+    path, file = os.path.dirname(output_json), os.path.basename(output_json)
+    json_name = current_month_day + "_" + file
+    output_json = Path(path, json_name)
+
+    with torch.inference_mode():
+        for batch_idx, batch in enumerate(
+            tqdm(dataloader, desc="Extracting MedSigLIP embeddings", unit="batch"),
             start=1,
         ):
-            end = min(start + batch_size, total_rows)
-            batch_df = df.iloc[start:end]
-
-            valid_records, valid_images, failed_records = _prepare_batch_records(
-                batch_df, args.image_dir
-            )
+            valid_records, valid_images, failed_records = batch
             unsuccessful_records.extend(failed_records)
 
             if valid_records:
@@ -274,6 +384,7 @@ def run_medsiglip_embeddings_experiment(args):
                     output_parquet,
                     output_json,
                     meta,
+                    write_parquet=False,
                 )
 
     parquet_path, json_path = _save_progress(
@@ -282,6 +393,7 @@ def run_medsiglip_embeddings_experiment(args):
         output_parquet,
         output_json,
         meta,
+        write_parquet=True,
     )
 
     success_patients = pd.Series([r["patient_num"] for r in successful_records]).nunique() if successful_records else 0
