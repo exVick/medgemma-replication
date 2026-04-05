@@ -59,7 +59,8 @@ def build_parser() -> argparse.ArgumentParser:
     medsiglip.add_argument("--output-file", dest="output_file", type=str, default="results_medsiglip_emb.parquet")
     medsiglip.add_argument("--model-id", dest="model_id", type=str, default="google/medsiglip-448")
     medsiglip.add_argument("--batch-size", dest="batch_size", type=int, default=64)
-    medsiglip.add_argument("--max-patients", dest="max_patients", type=int, default=8528, help="Upper bound for patient_num filter")
+    medsiglip.add_argument("--patient-lower", dest="patient_lower", type=int, default=1, help="Lower bound for patient_num filter")
+    medsiglip.add_argument("--patient-upper", "--max-patients", dest="patient_upper", type=int, default=8528, help="Upper bound for patient_num filter")
     medsiglip.add_argument("--save-every", dest="save_every", type=int, default=1, help="Save every N batches")
 
     return parser

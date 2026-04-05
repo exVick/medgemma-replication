@@ -14,7 +14,11 @@ from torch.utils.data import DataLoader, Dataset
 from transformers import AutoImageProcessor, AutoModel
 
 
-def _load_and_prepare_dataset(csv_file: str, max_patients: int = -1) -> pd.DataFrame:
+def _load_and_prepare_dataset(
+    csv_file: str,
+    patient_lower: int = 1,
+    patient_upper: int = 8528,
+) -> pd.DataFrame:
     df = pd.read_csv(csv_file)
     print(f"Loaded CSV: {len(df)} rows")
 
@@ -25,12 +29,13 @@ def _load_and_prepare_dataset(csv_file: str, max_patients: int = -1) -> pd.DataF
     df["patient_num"] = pd.to_numeric(
         df["Path"].str.extract(r"patient(\d+)")[0], errors="coerce"
     )
-    if max_patients is None or max_patients < 1:
-        df = df[df["patient_num"] >= 1].copy()
-        filter_note = "patient_num >= 1 (no upper limit)"
-    else:
-        df = df[df["patient_num"].between(1, max_patients)].copy()
-        filter_note = f"between(1, {max_patients})"
+    if patient_lower > patient_upper:
+        raise ValueError(
+            f"Invalid patient range: lower={patient_lower} > upper={patient_upper}"
+        )
+
+    df = df[df["patient_num"].between(patient_lower, patient_upper)].copy()
+    filter_note = f"between({patient_lower}, {patient_upper})"
 
     # Strip first two folders from source paths before joining with image_dir.
     df["Path_short"] = df["Path"].str.replace(r"^(?:[^/]+/){2}", "", regex=True)
@@ -254,12 +259,18 @@ def run_medsiglip_embeddings_experiment(args):
     model = AutoModel.from_pretrained(args.model_id).to(device)
     model.eval()
 
+    patient_lower = int(getattr(args, "patient_lower", 1))
+    patient_upper = int(
+        getattr(args, "patient_upper", getattr(args, "max_patients", 8528))
+    )
+
     meta = {
         "gpu_id": os.environ.get("CUDA_VISIBLE_DEVICES", "N/A"),
         "gpu_name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "N/A",
         "model_id": args.model_id,
         "batch_size": args.batch_size,
-        "max_patients": args.max_patients,
+        "patient_lower": patient_lower,
+        "patient_upper": patient_upper,
         "save_every_batches": args.save_every,
         "num_workers": None,
         "prefetch_factor": None,
@@ -276,7 +287,11 @@ def run_medsiglip_embeddings_experiment(args):
         "start_time": time.time(),
     }
 
-    df = _load_and_prepare_dataset(args.csv_file, args.max_patients)
+    df = _load_and_prepare_dataset(
+        args.csv_file,
+        patient_lower=patient_lower,
+        patient_upper=patient_upper,
+    )
 
     successful_records: List[Dict[str, Any]] = []
     unsuccessful_records: List[Dict[str, Any]] = []
