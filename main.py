@@ -25,7 +25,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = _EARLY_GPU_ID
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="MedGemma thesis experiments: report generation + CXR classification"
+        description="MedGemma thesis experiments: report generation + CXR classification + MedSigLIP embeddings"
     )
 
     parser.add_argument("--gpu", type=str, default=_EARLY_GPU_ID, help="Physical GPU ID")
@@ -53,6 +53,15 @@ def build_parser() -> argparse.ArgumentParser:
     cxr.add_argument("--max_samples", type=int, default=-1, help="-1 = all")
     cxr.add_argument("--save_every", type=int, default=50)
 
+    medsiglip = sub.add_parser("medsiglip_emb", help="Generate MedSigLIP embeddings and save to parquet")
+    medsiglip.add_argument("--csv-file", dest="csv_file", type=str, required=True)
+    medsiglip.add_argument("--image-dir", dest="image_dir", type=str, required=True)
+    medsiglip.add_argument("--output-file", dest="output_file", type=str, default="results_medsiglip_emb.parquet")
+    medsiglip.add_argument("--model-id", dest="model_id", type=str, default="google/medsiglip-448")
+    medsiglip.add_argument("--batch-size", dest="batch_size", type=int, default=64)
+    medsiglip.add_argument("--max-patients", dest="max_patients", type=int, default=-1, help="-1 = all")
+    medsiglip.add_argument("--save-every", dest="save_every", type=int, default=10, help="Save every N batches")
+
     return parser
 
 
@@ -64,6 +73,7 @@ def main():
         print("\nExample:")
         print("  python main.py --gpu 3 report_gen --parquet_file /path/to/test.parquet")
         print("  python main.py --gpu 3 cxr_classify --csv_file /path/to/test.csv --image_dir /path/to/images")
+        print("  python main.py --gpu 3 medsiglip_emb --csv-file /path/to/test.csv --image-dir /path/to/images")
         sys.exit(2)
 
     args = parser.parse_args()
@@ -72,8 +82,13 @@ def main():
     from core.model import load_model
     from experiments.cxr_report_generation import run_report_generation_experiment
     from experiments.cxr_image_classification import run_cxr_classification_experiment
+    from experiments.create_medsiglip_embeddings import run_medsiglip_embeddings_experiment
 
     print_cuda_info()
+
+    if args.command == "medsiglip_emb":
+        run_medsiglip_embeddings_experiment(args)
+        return
 
     model, processor, meta = load_model(
         model_id=args.model_id,
