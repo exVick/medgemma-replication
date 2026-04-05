@@ -7,6 +7,7 @@ In this project I reproduce the following MedGemma evaluation experiments from *
 
 1. **MIMIC-CXR report generation** (findings + impression)
 2. **CheXpert classification** (per-condition yes/no)
+3. **MedSigLIP image embeddings** (batched extraction to parquet)
 
 ## Project Structure
 
@@ -53,6 +54,19 @@ python main.py --gpu 42 classify \
   --csv_file /path/to/test_labels.csv \
   --image_dir /path/to/images \
   --output_file results_classify.csv
+```
+
+### MedSigLIP Embeddings
+
+```bash
+python main.py --gpu 4 medsiglip_emb \
+  --csv-file /path/to/labels.csv \
+  --image-dir /path/to/images \
+  --output-file results_medsiglip_emb.parquet \
+  --model-id google/medsiglip-448 \
+  --batch-size 64 \
+  --max-patients 500 \
+  --save-every 10
 ```
 
 ### RadGraph F1 Evaluation
