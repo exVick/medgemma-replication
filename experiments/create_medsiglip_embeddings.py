@@ -24,20 +24,14 @@ def _load_and_prepare_dataset(csv_file: str, max_patients: int = -1) -> pd.DataF
     df["patient_num"] = pd.to_numeric(
         df["Path"].str.extract(r"patient(\d+)")[0], errors="coerce"
     )
-    df = df[df["patient_num"].between(1, 8528)].copy()
+    df = df[df["patient_num"].between(1, max_patients)].copy()
 
     # Strip first two folders from source paths before joining with image_dir.
     df["Path_short"] = df["Path"].str.replace(r"^(?:[^/]+/){2}", "", regex=True)
 
-    if max_patients > 0:
-        selected_patients = (
-            df["patient_num"].drop_duplicates().head(max_patients).tolist()
-        )
-        df = df[df["patient_num"].isin(selected_patients)].copy()
-        print(
-            f"Applied max_patients={max_patients}: "
-            f"{len(selected_patients)} patients, {len(df)} rows"
-        )
+    print(
+        f"Applied patient_num filter: between(1, {max_patients}) -> {len(df)} rows"
+    )
 
     df = df.reset_index(drop=True)
     print(
