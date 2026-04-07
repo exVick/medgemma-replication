@@ -63,6 +63,7 @@ def _pick_target_sizes(
 
 
 def run_cxr_emb_linear_probing_experiment(args) -> List[Dict[str, object]]:
+    run_start_time = time.time()
     os.makedirs(args.output_dir, exist_ok=True)
 
     print("Loading datasets...")
@@ -193,6 +194,8 @@ def run_cxr_emb_linear_probing_experiment(args) -> List[Dict[str, object]]:
             run_summaries.append(metadata)
             print(f"Saved: {model_name}.joblib and .json")
 
+    total_runtime_seconds = round(time.time() - run_start_time, 2)
+
     summary_path = os.path.join(args.output_dir, "summary.json")
     with open(summary_path, "w") as f:
         json.dump(
@@ -201,6 +204,7 @@ def run_cxr_emb_linear_probing_experiment(args) -> List[Dict[str, object]]:
                 "sample_sizes": sample_sizes,
                 "min_overage_ratio": args.min_overage_ratio,
                 "c_values": c_values,
+                "total_runtime_seconds": total_runtime_seconds,
                 "runs": run_summaries,
             },
             f,
