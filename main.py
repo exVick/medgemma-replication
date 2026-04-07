@@ -63,6 +63,17 @@ def build_parser() -> argparse.ArgumentParser:
     medsiglip.add_argument("--patient-upper", "--max-patients", dest="patient_upper", type=int, default=8528, help="Upper bound for patient_num filter")
     medsiglip.add_argument("--save-every", dest="save_every", type=int, default=1, help="Save every N batches")
 
+    probe = sub.add_parser("cxr_emb_probe", help="CXR embedding linear probing with logistic regression")
+    probe.add_argument("--output-dir", dest="output_dir", type=str, required=True)
+    probe.add_argument("--train-parquet-path", dest="train_parquet_path", type=str, required=True)
+    probe.add_argument("--val-parquet-path", dest="val_parquet_path", type=str, required=True)
+    probe.add_argument("--conditions", nargs="+", default=["Atelectasis", "Cardiomegaly", "Consolidation"])
+    probe.add_argument("--sample-sizes", nargs="+", type=int, default=[64])
+    probe.add_argument("--min-overage-ratio", dest="min_overage_ratio", type=float, default=1.5)
+    probe.add_argument("--c-values", nargs="+", type=float, default=[0.001, 0.01, 0.1, 1.0, 10.0])
+    probe.add_argument("--max-iter", dest="max_iter", type=int, default=5000)
+    probe.add_argument("--random-state", dest="random_state", type=int, default=42)
+
     return parser
 
 
@@ -75,6 +86,7 @@ def main():
         print("  python main.py --gpu 3 report_gen --parquet_file /path/to/test.parquet")
         print("  python main.py --gpu 3 cxr_classify --csv_file /path/to/test.csv --image_dir /path/to/images")
         print("  python main.py --gpu 3 medsiglip_emb --csv-file /path/to/test.csv --image-dir /path/to/images")
+        print("  python main.py --gpu 3 cxr_emb_probe --output-dir /path/to/out --train-parquet-path /path/to/train.parquet --val-parquet-path /path/to/val.parquet")
         sys.exit(2)
 
     args = parser.parse_args()
@@ -84,11 +96,15 @@ def main():
     from experiments.cxr_report_generation import run_report_generation_experiment
     from experiments.cxr_image_classification import run_cxr_classification_experiment
     from experiments.create_medsiglip_embeddings import run_medsiglip_embeddings_experiment
+    from experiments.cxr_emb_linear_probing import run_cxr_emb_linear_probing_experiment
 
     print_cuda_info()
 
     if args.command == "medsiglip_emb":
         run_medsiglip_embeddings_experiment(args)
+        return
+    if args.command == "cxr_emb_probe":
+        run_cxr_emb_linear_probing_experiment(args)
         return
 
     model, processor, meta = load_model(
