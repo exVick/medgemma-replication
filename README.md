@@ -59,7 +59,7 @@ python main.py --gpu 42 classify \
 ### MedSigLIP Embeddings
 
 ```bash
-python main.py --gpu 4 medsiglip_emb \
+python main.py --gpu 0 medsiglip_emb \
   --csv-file /path/to/labels.csv \
   --image-dir /path/to/images \
   --output-file results_medsiglip_emb.parquet \
@@ -67,6 +67,18 @@ python main.py --gpu 4 medsiglip_emb \
   --batch-size 64 \
   --max-patients 500 \
   --save-every 10
+```
+
+### Linear Probing
+
+```bash
+python main.py cxr_emb_probe \
+  --output-dir path/to/save/models \
+  --train-parquet-path path/to/train.parquet \
+  --val-parquet-path path/to/validation.parquet \
+  --sample-sizes 64 512 4096 \
+  --conditions "Atelectasis" "Cardiomegaly" "Pleural Effusion" \
+
 ```
 
 ### RadGraph F1 Evaluation
