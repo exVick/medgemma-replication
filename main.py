@@ -74,6 +74,13 @@ def build_parser() -> argparse.ArgumentParser:
     probe.add_argument("--max-iter", dest="max_iter", type=int, default=5000)
     probe.add_argument("--random-state", dest="random_state", type=int, default=42)
 
+    test_probe = sub.add_parser("cxr_test_probe", help="Evaluate trained CXR embedding linear probes on test set")
+    test_probe.add_argument("--test-parquet-path", dest="test_parquet_path", type=str, required=True)
+    test_probe.add_argument("--csv-file", dest="csv_file", type=str, required=True)
+    test_probe.add_argument("--linear-probes-path", dest="linear_probes_path", type=str, required=True)
+    test_probe.add_argument("--output-dir", dest="output_dir", type=str, required=True)
+    test_probe.add_argument("--output-file", dest="output_file", type=str, default="cxr_test_linear_probing_results.json")
+
     return parser
 
 
@@ -87,6 +94,7 @@ def main():
         print("  python main.py --gpu 3 cxr_classify --csv_file /path/to/test.csv --image_dir /path/to/images")
         print("  python main.py --gpu 3 medsiglip_emb --csv-file /path/to/test.csv --image-dir /path/to/images")
         print("  python main.py --gpu 3 cxr_emb_probe --output-dir /path/to/out --train-parquet-path /path/to/train.parquet --val-parquet-path /path/to/val.parquet")
+        print("  python main.py --gpu 3 cxr_test_probe --test-parquet-path /path/to/test_emb.parquet --csv-file /path/to/test_labels.csv --linear-probes-path /path/to/probes --output-dir /path/to/out")
         sys.exit(2)
 
     args = parser.parse_args()
@@ -97,6 +105,7 @@ def main():
     from experiments.cxr_image_classification import run_cxr_classification_experiment
     from experiments.create_medsiglip_embeddings import run_medsiglip_embeddings_experiment
     from experiments.cxr_emb_linear_probing import run_cxr_emb_linear_probing_experiment
+    from experiments.cxr_test_linear_probing import run_cxr_test_linear_probing_experiment
 
     print_cuda_info()
 
@@ -105,6 +114,9 @@ def main():
         return
     if args.command == "cxr_emb_probe":
         run_cxr_emb_linear_probing_experiment(args)
+        return
+    if args.command == "cxr_test_probe":
+        run_cxr_test_linear_probing_experiment(args)
         return
 
     model, processor, meta = load_model(
