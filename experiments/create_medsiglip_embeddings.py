@@ -38,7 +38,7 @@ def _load_and_prepare_dataset(
     filter_note = f"between({patient_lower}, {patient_upper})"
 
     # Strip first two folders from source paths before joining with image_dir.
-    df["Path_short"] = df["Path"].str.replace(r"^(?:[^/]+/){2}", "", regex=True)
+    df["Path_short"] = df["Path"].str.extract(r"(patient.*)", expand=False)
 
     print(f"Applied patient_num filter: {filter_note} -> {len(df)} rows")
 
