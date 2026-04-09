@@ -18,9 +18,12 @@ In this project I reproduce the following MedGemma evaluation experiments from *
 ├── core/                       # Shared backbone
 │   ├── model.py                # model loading + generic inference
 │   └── utils.py                # GPU setup, metadata, save utils
-├── experiments/                # Task-specific logic
-│   ├── report_generation.py
-│   └── classification.py
+├── experiments/                # Separate experiment sections
+│   ├── cxr_image_classification.py
+│   ├── cxr_report_generation.py
+│   ├── create_medsiglip_embeddings.py
+│   ├── cxr_emb_linear_probing.py
+│   └── cxr_test_linear_probing.py
 └── config/
     └── prompts.py              # centralized prompt registry
 ```
