@@ -1,0 +1,23 @@
+name: medgemma-main
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  - pytorch>=2.4
+  - pytorch-cuda=12.1
+  - pandas
+  - numpy
+  - scikit-learn
+  - pillow
+  - tqdm
+  - pyarrow
+  - psutil
+  - joblib
+  - pip:
+      - transformers>=4.51
+      - accelerate>=0.30
+      - bitsandbytes>=0.43
+      - sentencepiece
